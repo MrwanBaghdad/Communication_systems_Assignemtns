@@ -1,4 +1,6 @@
 close all;
+
+%% Read audio signal 
 [signal,Fs] = audioread('malcolm_x.wav');
 
 
@@ -9,7 +11,7 @@ t=length(sampled);
 t=linspace(0,15,t);
 plot(t,sampled);
 title('sampled signal')
-%plot spectrum
+%% plot spectrum
 spectrum=fftshift(fft(sampled));
 dF = Fs/length(sampled);
 f = -Fs/2:dF:Fs/2-dF; 
@@ -17,18 +19,14 @@ figure;
 plot(f,abs(spectrum));
 title('Spectrum')
 xlabel('Frequency')
-%Uniform quantization with 256 levels.
+%% Uniform quantization with 256 levels.
 K=8;
 y=sampled(:,1);
 ymax=max(y);
 ymin=min(y);  
 q=(ymax-ymin)/(2^K);
-quant=[];
-  for i =1: length(y)
-    quant(i)= round(y(i)*2^(K-1))/(2^(K-1))-sign(y(i))*q/2;
-  end
-quantiz = @(x,k)  ((max(x) - min(x)) / (2^(k) -1) ) * floor( (x /  ((max(x) - min(x)) / (2^(k) -1 ) ) ) + 0.5);
-delta = ((max(x) - min(x)) / (2^(k) -1) )
+quant= uencode(y, 8) ;
+delta = ((max(y) - min(y)) / (2^(K) -1) )
 quant = uencode(y,8);
 quant = double(quant);
 quantnoise=mean((y-quant).^2);
@@ -79,15 +77,23 @@ title('Uniform quantization')
  xlabel('U values')
  ylabel('mean square error')
 
- %% Quantization of A2 
+ %% Quantization of A2 and adding noise 
 
 pcm = uencode(A2, 8);
 SNR = 10:2:30;
 ber = []    
-for i= 1:length(SNR)
-[n, b] = biterr(de2bi(pcm), de2bi(qamdemod(awgn(qammod(pcm, 256, 0,'bin'), SNR(i),'measured'), 256, 0,'bin')));
-ber(i) = b;
+i = 1
 
-% reconstruction 
-end
+ for i= 1:length(SNR)
+received = (qamdemod(awgn(qammod(pcm, 256, 0,'bin'), SNR(i),'measured'), 256, 0,'bin'))
+[n, b] = biterr(de2bi(pcm), de2bi(received));
+ber(i) = b;
+%% reconstruction 
+% received signal is quantized multiply by delta
+reconstruction = udecode(uint16(received), 8)
+reconstruction_expanded = compand(reconstruction, 87.6, max(y), 'a/expander')
+sound(reconstruction_expanded)
+file_name = strcat(num2str(i),'.wav')
+audioWrite(file_name, reconstruction_expanded, Fs)
+ end
 plot(SNR, ber)
